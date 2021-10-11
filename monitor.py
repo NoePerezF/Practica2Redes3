@@ -4,11 +4,14 @@ import time
 import smtplib
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
+import os
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 rrdpath = 'RRD/'
 imgpath = 'IMG/'
 fname = 'trend.rrd'
 mailsender = "testredes3@gmail.com"
-mailreceip = "perezozo79@gmail.com"
+mailreceip = "tanibet.escom@gmail.com"
 mailserver = 'smtp.gmail.com: 587'
 password = 'prueba123'
 cpu_u_1 = 30
@@ -37,6 +40,8 @@ def consultaSNMP(comunidad,host,oid):
         for varBind in varBinds:
             varB=(' = '.join([x.prettyPrint() for x in varBind]))
             resultado= varB.split()[2]
+            if((len(varB.split("Software")) > 1) | (resultado == 'Linux')):
+                resultado = varB.split("=")[1]
     return resultado
 def createRRD():
     ret = rrdtool.create(rrdpath+"trend.rrd",
@@ -153,8 +158,34 @@ def notify(file,subject):
     s.login(mailsender, password)
 
     s.sendmail(mailsender, mailreceip, msg.as_string())
+    s.sendmail(mailsender, 'noepfab@gmail.com', msg.as_string())
     s.quit()
-
+def generarReporte(name):
+    res = consultaSNMP('home','192.168.3.26',"1.3.6.1.2.1.1.1.0")
+    if(len(res.split("Software")) > 1):
+        sistema = res.split("Software")[1].split(" ")[1]
+        version = res.split("Software")[1].split(" ")[3]
+    else:
+        sistema = res.split(" ")[1]
+        version = res.split(" ")[3]
+    ubicacion = consultaSNMP('home','192.168.3.26',"1.3.6.1.2.1.1.6.0")
+    tiempo = consultaSNMP('home','192.168.3.26',"1.3.6.1.2.1.1.3.0")
+    tiempo ="{0:.2f}".format(((int(tiempo)*0.01)/60)/60)
+    ip = '192.168.3.26'
+    c = canvas.Canvas("reportes/"+name+".pdf",pagesize=A4)
+    w, h = A4
+    if(sistema == "Linux"):
+        c.drawImage("IMG/linux.jpg",10,h-60,width=50,height=50)
+    else:
+        c.drawImage("IMG/windows.jpeg",10,h-60,width=50,height=50)
+    c.setFont("Helvetica", 10)
+    c.drawString(65, h-25, "SO: "+sistema+"  Version: "+version+"  Ubicacion: "+ubicacion)
+    c.drawString(65, h-50, "Tiempo de actividad antes del ultimo reinicio: "+tiempo+"hrs  Comunidad: "+'home'+' IP: '+ip)
+    c.line(0,h-65,w,h-65)
+    c.drawImage("IMG/cpu.png",10,h-185,width=w-20,height=110)
+    c.drawImage("IMG/disk.png",10,h-305,width=w-20,height=110)
+    c.drawImage("IMG/ram.png",10,h-425,width=w-20,height=110)
+    c.save()
 def capturar():
     carga_CPU = int(consultaSNMP('home','192.168.3.26','1.3.6.1.2.1.25.3.3.1.2.196608'))
     
@@ -162,8 +193,8 @@ def capturar():
     ram_used = int(consultaSNMP('home','192.168.3.26','1.3.6.1.4.1.2021.4.11.0'))
     ram_p = 100-(ram_used*100)/ram_total
     
-    disk_total = int(consultaSNMP('home','192.168.3.26','1.3.6.1.2.1.25.2.3.1.5.1'))
-    disk_used = int(consultaSNMP('home','192.168.3.26','1.3.6.1.2.1.25.2.3.1.6.1'))
+    disk_total = int(consultaSNMP('home','192.168.3.26','1.3.6.1.2.1.25.2.3.1.5.3'))
+    disk_used = int(consultaSNMP('home','192.168.3.26','1.3.6.1.2.1.25.2.3.1.6.3'))
     disk_p = (disk_used*100)/disk_total
     
     #print("RAM TOTAL: "+str(ram_total)+"/nRAM USED: "+str(ram_used))
@@ -174,55 +205,82 @@ def capturar():
     if(carga_CPU >= cpu_u_1):
         if(not flags[0]):
             graph(1,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(2,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(3,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             notify('cpu.png',"Primer umbral de uso de CPU superado")
+            generarReporte('cpu')
             flags[0] = True
             print('Primer umbral de uso de CPU superado')
     if(carga_CPU >= cpu_u_2):
         if(not flags[1]):
             graph(1,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(2,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(3,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             notify('cpu.png',"Segundo umbral de uso de CPU superado")
+            generarReporte('cpu')
             flags[1] = True
             print('Segundo umbral de uso de CPU superado')
     if(carga_CPU >= cpu_u_3):
         if(not flags[2]):
             graph(1,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(2,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(3,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             notify('cpu.png',"Terccer umbral de uso de CPU superado")
+            generarReporte('cpu')
             flags[2] = True
             print('Tercer umbral de uso de CPU superado')
     if(ram_p >= ram_u_1):
         if(not flags[3]):
+            graph(1,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             graph(2,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(3,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             notify('ram.png',"Primer umbral de uso de RAM superado")
+            generarReporte('ram')
             flags[3] = True
             print('Primer umbral de uso de RAM superado')
     if(ram_p >= ram_u_2):
         if(not flags[4]):
+            graph(1,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             graph(2,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(3,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             notify('ram.png',"Segundo umbral de uso de RAM superado")
+            generarReporte('ram')
             flags[4] = True
             print('Segundo umbral de uso de RAM superado')
     if(ram_p >= ram_u_3):
         if(not flags[5]):
+            graph(1,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             graph(2,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(3,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             notify('ram.png',"Tercer umbral de uso de RAM superado")
+            generarReporte('ram')
             flags[5] = True
             print('Tercer umbral de uso de RAM superado')
     if(disk_p >= disk_u_1):
         if(not flags[6]):
+            graph(1,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(2,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             graph(3,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             notify('disk.png',"Primer umbral de uso de Disco superado")
+            generarReporte('disk')
             flags[6] = True
             print('Primer umbral de uso de Disco superado')
     if(disk_p >= disk_u_2):
         if(not flags[7]):
+            graph(1,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(2,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             graph(3,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             notify('disk.png',"Segundo umbral de uso de Disco superado")
+            generarReporte('disk')
             flags[7] = True
             print('Segundo umbral de uso de Disco superado')
     if(not disk_p >= disk_u_3):
         if(flags[8]):
+            graph(1,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
+            graph(2,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             graph(3,int(rrdtool.last(rrdpath+"trend.rrd"))-500,int(rrdtool.last(rrdpath+"trend.rrd")))
             notify('disk.png',"Tercer umbral de uso de Disco superado")
+            generarReporte('disk')
             flags[8] = True
             print('Tercer umbral de uso de Disco superado')
     time.sleep(1)
